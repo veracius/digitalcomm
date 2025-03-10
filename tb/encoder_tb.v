@@ -21,7 +21,7 @@ module encoder_tb;
 
    //Register Arrays to hold vector dat
    integer N;
-   reg [BITS_WIDTH-1:0] encoder_vectors(1:2**BITS_WIDTH);
+   reg [BITS_WIDTH-1:0] encoder_vectors[0:2**BITS_WIDTH-1];
 
    ////////////////////////////////////////////////////////////////////
    //RTL MUT
@@ -29,34 +29,35 @@ module encoder_tb;
              .DIM1_WIDTH(DIM1_WIDTH), .DIM2_WIDTH(DIM2_WIDTH))
       encoder_mut(
          .clk (clk_500M),
-         .rst (     rst).
+         .rst (     rst),
          .data(  dataIn),
          .x0  (      x0),
          .x1  (      x1),
          .x2  (      x2)
-      );
+   );
 
    ////////////////////////////////////////////////////////////////////
    //Create Clock
    initial clk_500M = 0;
    always
-      @(CLOCK_500M_PERIOD/2) = !clk_500M;
+      #(CLOCK_500M_PERIOD/2) clk_500M = !clk_500M;
 
    ////////////////////////////////////////////////////////////////////
    //Apply Stimulus to MUT
    initial begin
       //Load Vectors into Memory
-      $readmemb("./vec/encoder.vec", encoder_vectors);
-      
+      $readmemb("/home/f/Documents/projects-local/digitalcomm/vec/encoder.vec", encoder_vectors);
+
       //Setup and Hold Reset:
       rst = 0;
       #CLOCK_500M_PERIOD rst = 1; //Active High Reset
       #CLOCK_500M_PERIOD rst = 0;
 
       //Cycle through vectors
-      for(N=1; M<=2**BITS_WIDTH, N=N+1)
+      for(N=0; N<2**BITS_WIDTH; N=N+1)
          @(posedge clk_500M)
-            dataIn = encoder_vectors(N);
+            dataIn = encoder_vectors[N];
+            $display("%b", dataIn);
 
       //Flush Pipeline
       repeat(3)
