@@ -12,11 +12,11 @@
 module modulator
    #( parameter DIM0_WIDTH = 2, //Dimension 1 has 4 points
       parameter DIM1_WIDTH = 2, //Dimension 2 has 4 points
-      parameter DIM2_WIDTH = 1) //Dimension3 has 2 points
+      parameter DIM2_WIDTH = 1, //Dimension3 has 2 points
       parameter SAMPLES_PER_SYMBOL = 10, //num samples between 0 and T
       parameter COUNTER_SIZE       = 4,  //max(log_2(SAMPLES_PER_SYMBOL))
       parameter ADC_DEPTH          = 12,
-      parameter ADC_ZERO_OFFSET    = ADC_DEPTH'b1000_0000_0000) //Depends on Circuit/ADC
+      parameter ADC_ZERO_OFFSET    = 12'b0000_0000_0000) //Depends on Circuit/ADC
    (  input clk, rst,
       input  [DIM0_WIDTH-1:0] x0,
       input  [DIM1_WIDTH-1:0] x1,
@@ -31,23 +31,45 @@ module modulator
 
    //Control & Intermediary Signals
    reg [COUNTER_SIZE-1:0] sample_index_reg;
+   reg [DIM0_WIDTH-1:0] x0_reg; //capture input vector and hold transmission. Avoids breaking psi if not aligned properly
+   reg [DIM1_WIDTH-1:0] x1_reg; //capture input vector and hold transmission. Avoids breaking psi if not aligned properly
+   reg [DIM2_WIDTH-1:0] x2_reg; //capture input vector and hold transmission. Avoids breaking psi if not aligned properly  
    reg [ADC_DEPTH-1:0] psi0_reg;
    reg [ADC_DEPTH-1:0] psi1_reg;
    reg [ADC_DEPTH-1:0] psi2_reg;
    reg [ADC_DEPTH-1:0] mixed_reg; //holdmixed datal, wired to output
+
    //Initialize the Memory
    initial begin
-      $readmemh("./vec/basis0.mem", basis0_mem); //(1/3)sinc(t/T)sin(2πt/T)
-      $readmemh("./vec/basis1.mem", basis1_mem); //(1/3)sinc(t/T)sin(2πt/T+π/2)
-      $readmemh("./vec/basis2.mem", basis2_mem); //(1/3)sinc(t/T)sin(2πt/T-π/2)
+      $readmemh("./basis0.mem", basis0_mem); //(1/3)sinc(t/T)sin(2πt/T)
+      $readmemh("./basis1.mem", basis1_mem); //(1/3)sinc(t/T)sin(2πt/T+π/2)
+      $readmemh("./basis2.mem", basis2_mem); //(1/3)sinc(t/T)sin(2πt/T-π/2)
    end
 
    //Control Signal: Sample Index Register
    always @(posedge clk) begin: index_proc
       if(rst == 1'b1) begin
-         sample_index_reg <= (COUNTER_SIZE-1)'d1;
+         sample_index_reg <= 1;
       end else begin
          sample_index_reg <= (sample_index_reg == 10) ? 1 : sample_index_reg + 1;
+      end
+   end
+
+   always @(posedge clk) begin: vector_capture_proc
+      if(rst == 1'b1) begin
+         x0_reg <= 0;
+         x1_reg <= 0;
+         x2_reg <= 0;
+      end else begin
+         if(sample_index_reg == 1) begin //register
+            x0_reg <= x0;
+            x1_reg <= x1;
+            x2_reg <= x2;
+         end else begin
+            x0_reg <= x0_reg;
+            x1_reg <= x1_reg;
+            x2_reg <= x2_reg;            
+         end
       end
    end
 
@@ -59,9 +81,9 @@ module modulator
          psi1_reg <= {ADC_DEPTH-1{1'b0}};
          psi2_reg <= {ADC_DEPTH-1{1'b0}};
       end else begin
-         psi0_reg <= (x0[1]?basis0_mem[sample_index_reg]>>>1:0) + (x0[0]?basis0_mem[sample_index_reg]>>>2:0);
-         psi1_reg <= (x1[1]?basis1_mem[sample_index_reg]>>>1:0) + (x1[0]?basis1_mem[sample_index_reg]>>>2:0);
-         psi2_reg <= (x2[1]?basis2_mem[sample_index_reg]>>>1:0) + (x2[0]?basis2_mem[sample_index_reg]>>>2:0);
+         psi0_reg <= (x0_reg[1]?basis0_mem[sample_index_reg]>>1:0) + (x0_reg[0]?basis0_mem[sample_index_reg]>>2:0);
+         psi1_reg <= (x1_reg[1]?basis1_mem[sample_index_reg]>>1:0) + (x1_reg[0]?basis1_mem[sample_index_reg]>>2:0);
+         psi2_reg <= (x2_reg[0]?basis2_mem[sample_index_reg]>>1:0);
       end
    end
 
